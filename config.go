@@ -714,7 +714,7 @@ func validateRemoteModeConfig(cfg *Config) error {
 	}
 	err := cfg.Lnd.LogWriter.InitLogRotator(
 		filepath.Join(r.LitLogDir, cfg.Network, defaultLogFilename),
-		r.LitMaxLogFileSize, r.LitMaxLogFiles,
+		build.Gzip, r.LitMaxLogFileSize, r.LitMaxLogFiles,
 	)
 	if err != nil {
 		return fmt.Errorf("log rotation setup failed: %v", err.Error())
