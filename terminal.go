@@ -209,6 +209,9 @@ type LightningTerminal struct {
 
 	restHandler http.Handler
 	restCancel  func()
+
+	httpsAddr string
+	httpAddr  string
 }
 
 // New creates a new instance of the lightning-terminal daemon.
@@ -1501,6 +1504,8 @@ func (g *LightningTerminal) startMainWebServer() error {
 	}
 	tlsListener := tls.NewListener(httpListener, tlsConfig)
 
+	g.httpsAddr = tlsListener.Addr().String()
+
 	g.wg.Add(1)
 	go func() {
 		defer g.wg.Done()
@@ -1520,6 +1525,8 @@ func (g *LightningTerminal) startMainWebServer() error {
 			return fmt.Errorf("unable to listen on %v: %v",
 				g.cfg.HTTPListen, err)
 		}
+
+		g.httpAddr = insecureListener.Addr().String()
 
 		g.wg.Add(1)
 		go func() {
@@ -1807,7 +1814,7 @@ func (g *LightningTerminal) showStartupInfo() error {
 		version: build.Version(),
 		webURI: fmt.Sprintf("https://%s", strings.ReplaceAll(
 			strings.ReplaceAll(
-				g.cfg.HTTPSListen, "0.0.0.0", "localhost",
+				g.httpsAddr, "0.0.0.0", "localhost",
 			), "[::]", "localhost",
 		)),
 	}
@@ -1854,11 +1861,11 @@ func (g *LightningTerminal) showStartupInfo() error {
 	}
 
 	// If there's an additional HTTP listener, list it as well.
-	listenAddr := g.cfg.HTTPSListen
-	if g.cfg.HTTPListen != "" {
-		host := toLocalAddress(g.cfg.HTTPListen)
+	listenAddr := g.httpsAddr
+	if g.httpAddr != "" {
+		host := toLocalAddress(g.httpAddr)
 		info.webURI = fmt.Sprintf("%s or http://%s", info.webURI, host)
-		listenAddr = fmt.Sprintf("%s, %s", listenAddr, g.cfg.HTTPListen)
+		listenAddr = fmt.Sprintf("%s, %s", listenAddr, g.httpAddr)
 	}
 
 	webInterfaceString := fmt.Sprintf(
