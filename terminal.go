@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -478,17 +479,43 @@ func (g *LightningTerminal) start() error {
 		macChan        = make(chan []byte, 1)
 	)
 	if g.cfg.LndMode == ModeIntegrated {
+		// Derive the listener address.
+		addr := g.cfg.Lnd.RPCListeners[0]
+
+		// Create the on-demand listener.
+		var lis net.Listener = &onDemandListener{
+			addr: addr,
+		}
+
+		// Check if you can derive the port for the address.
+		addrport, ok := addr.(interface {
+			AddrPort() netip.AddrPort
+		})
+		if ok {
+			// Check if the address is using port 0.
+			if addrport.AddrPort().Port() == 0 {
+				// Listen immedately, so we can allocate a port.
+				lis, err = net.Listen(addr.Network(), addr.String())
+				if err != nil {
+					return err
+				}
+
+				// Update the LND configuration.
+				g.cfg.Lnd.RPCListeners[0] = lis.Addr()
+			}
+		}
+
 		lisCfg := lnd.ListenerCfg{
-			RPCListeners: []*lnd.ListenerWithSignal{{
-				Listener: &onDemandListener{
-					addr: g.cfg.Lnd.RPCListeners[0],
+			RPCListeners: []*lnd.ListenerWithSignal{
+				{
+					Listener: lis,
+					Ready:    readyChan,
 				},
-				Ready: readyChan,
-			}, {
-				Listener: bufRpcListener,
-				Ready:    bufReadyChan,
-				MacChan:  macChan,
-			}},
+				{
+					Listener: bufRpcListener,
+					Ready:    bufReadyChan,
+					MacChan:  macChan,
+				}},
 		}
 
 		implCfg := &lnd.ImplementationCfg{
